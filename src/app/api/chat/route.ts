@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/option";
 import prisma from "@/lib/prisma";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,37 +56,30 @@ export async function POST(req: NextRequest) {
       ? `Analysis summary: ${journal.aiAnalysis.summary || ''}\nSentiment: ${journal.aiAnalysis.sentiment || ''}\nTopics: ${journal.aiAnalysis.topics?.join(', ') || ''}`
       : 'No analysis available';
 
-    // Updated Gemini API request format
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `You are an empathetic AI journaling assistant. Help the user reflect on their journal entries and provide thoughtful insights.
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 500,
+      }
+    });
+
+    // Prepare the prompt
+    const prompt = `You are an empathetic AI journaling assistant. Help the user reflect on their journal entries and provide thoughtful insights.
                    Current journal entry: "${journal.content}"
                    ${analysisContext}
                    ${chatContext}
-                   User query: ${content}`
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 500,
-        }
-      })
-    });
+                   User query: ${content}`;
 
-    const result = await response.json();
+    // Generate content using Gemini
+    const result = await model.generateContent(prompt);
+    const aiResponse = result.response.text();
 
-    if (!result.candidates?.[0]?.content?.parts?.[0]?.text) {
+    if (!aiResponse) {
       throw new Error("Invalid response from Gemini");
     }
-
-    const aiResponse = result.candidates[0].content.parts[0].text;
 
     const newChat = await prisma.chat.create({
       data: {
