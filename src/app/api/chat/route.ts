@@ -5,7 +5,6 @@ import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
-    // Validate request body
     const body = await req.json();
     const { content, journalId } = body;
 
@@ -16,7 +15,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -25,7 +23,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get journal and previous chats
     const journal = await prisma.journal.findUnique({
       where: { 
         id: journalId,
@@ -35,7 +32,7 @@ export async function POST(req: NextRequest) {
           orderBy: {
             createdAt: 'desc'
           },
-          take: 5 // Get last 5 messages for context
+          take: 5
         },
         aiAnalysis: true
       }
@@ -48,51 +45,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Prepare context from previous chats
     const chatContext = journal.chats.length > 0
       ? `Previous conversation context: ${journal.chats.reverse().map(chat => 
           `User: ${chat.content}\nAI: ${chat.response}`
         ).join('\n')}`
       : 'No previous conversation';
 
-    // Get AI analysis context if available
     const analysisContext = journal.aiAnalysis
       ? `Analysis summary: ${journal.aiAnalysis.summary || ''}\nSentiment: ${journal.aiAnalysis.sentiment || ''}\nTopics: ${journal.aiAnalysis.topics?.join(', ') || ''}`
       : 'No analysis available';
 
-    // Create chat completion using Gemini API
-    const response = await fetch('https://api.gemini.com/v1/chat/completions', {
+    // Updated Gemini API request format
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are an empathetic AI journaling assistant. Help the user reflect on their journal entries and provide thoughtful insights. Current journal entry: "${journal.content}". ${analysisContext}. ${chatContext}`
-          },
-          {
-            role: "user",
-            content: content
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
+        contents: [{
+          parts: [{
+            text: `You are an empathetic AI journaling assistant. Help the user reflect on their journal entries and provide thoughtful insights.
+                   Current journal entry: "${journal.content}"
+                   ${analysisContext}
+                   ${chatContext}
+                   User query: ${content}`
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 500,
+        }
       })
     });
 
     const result = await response.json();
 
-    if (!result.choices?.[0]?.message?.content) {
+    if (!result.candidates?.[0]?.content?.parts?.[0]?.text) {
       throw new Error("Invalid response from Gemini");
     }
 
-    const aiResponse = result.choices[0].message.content;
+    const aiResponse = result.candidates[0].content.parts[0].text;
 
-    // Create new chat message
     const newChat = await prisma.chat.create({
       data: {
         content: content,
@@ -106,7 +100,6 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // Update or create AI analysis if it doesn't exist
     if (!journal.aiAnalysis) {
       await prisma.aiAnalysis.create({
         data: {
