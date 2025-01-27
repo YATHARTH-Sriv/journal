@@ -1,14 +1,7 @@
-import { OpenAIApi, Configuration } from "openai-edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/option";
 import prisma from "@/lib/prisma";
-
-const config = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const openai = new OpenAIApi(config);
 
 export async function POST(req: NextRequest) {
   try {
@@ -67,28 +60,34 @@ export async function POST(req: NextRequest) {
       ? `Analysis summary: ${journal.aiAnalysis.summary || ''}\nSentiment: ${journal.aiAnalysis.sentiment || ''}\nTopics: ${journal.aiAnalysis.topics?.join(', ') || ''}`
       : 'No analysis available';
 
-    // Create chat completion
-    const chatCompletion = await openai.createChatCompletion({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `You are an empathetic AI journaling assistant. Help the user reflect on their journal entries and provide thoughtful insights. Current journal entry: "${journal.content}". ${analysisContext}. ${chatContext}`
-        },
-        {
-          role: "user",
-          content: content
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 500
+    // Create chat completion using Gemini API
+    const response = await fetch('https://api.gemini.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: `You are an empathetic AI journaling assistant. Help the user reflect on their journal entries and provide thoughtful insights. Current journal entry: "${journal.content}". ${analysisContext}. ${chatContext}`
+          },
+          {
+            role: "user",
+            content: content
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
     });
 
-    // Parse the response
-    const result = await chatCompletion.json();
-    
+    const result = await response.json();
+
     if (!result.choices?.[0]?.message?.content) {
-      throw new Error("Invalid response from OpenAI");
+      throw new Error("Invalid response from Gemini");
     }
 
     const aiResponse = result.choices[0].message.content;
@@ -129,7 +128,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("Chat error:", error);
     
-    const errorMessage = error.code === 'OPENAI_API_ERROR' 
+    const errorMessage = error.code === 'GEMINI_API_ERROR' 
       ? 'Failed to get AI response'
       : error.code === 'P2002' 
         ? 'Database constraint violation'
