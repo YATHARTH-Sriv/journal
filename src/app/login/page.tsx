@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { signIn } from "next-auth/react";
 import Image from "next/image";
+import { FcGoogle } from "react-icons/fc";
 
 export default function LoginPage() {
   return (
@@ -15,7 +16,7 @@ export default function LoginPage() {
           onClick={() => signIn('google', { callbackUrl: '/onboarding' })}
           className="w-full flex items-center justify-center gap-2"
         >
-          <Image src="/google.svg" alt="Google" width={20} height={20} />
+          <FcGoogle className=" w-5 h-5"  />
           Continue with Google
         </Button>
       </div>

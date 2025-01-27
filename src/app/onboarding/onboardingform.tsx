@@ -11,6 +11,7 @@ import confetti from "canvas-confetti"
 import axios from "axios"
 import { useSession } from "next-auth/react"
 import { ProgressSteps } from "@/components/progressbar"
+import Image from "next/image"
 
 const steps = ["Your Name", "Your Mood", "Interests", "Preferences"]
 
@@ -248,10 +249,14 @@ function InterestsStep({ selected, onChange }: { selected: string[]; onChange: (
             className={`relative flex flex-col items-center p-4 rounded-lg border-2 cursor-pointer transition-all
               ${selected.includes(interest.id) ? 'border-accent bg-accent/10' : 'border-transparent hover:bg-muted'}`}
           >
-            <img 
+            <Image
               src={interest.icon} 
               alt={interest.name} 
-              className="w-16 h-16 rounded-lg object-cover mb-2" 
+              className="rounded-lg object-cover mb-2" 
+              width={64}
+              height={64}
+
+
             />
             <span className="text-sm font-medium">{interest.name}</span>
             {selected.includes(interest.id) && (
