@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  name          String?
+  email         String?      @unique
+  mood          String?
+  interests     String[]   
+  preferences   String?
+  isOnboarded   Boolean      @default(false)
+  journals      Journal[]
+  moodEntries   MoodEntry[]
+  reflections   Reflection[]
+  chats         Chat[]       // New relation
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Journal {
+  id          String      @id @default(cuid())
+  content     String      @db.Text
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mood        String?
+  tags        String[]
+  embedding   Float[]
+  position    String?
+  chats       Chat[]      // New relation for chat messages
+  aiAnalysis  AiAnalysis? // Changed to relation instead of Json
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+// New model for AI Analysis
+model AiAnalysis {
+  id         String   @id @default(cuid())
+  journalId  String   @unique
+  journal    Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  summary    String?  @db.Text
+  sentiment  String?
+  topics     String[]
+  insights   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([journalId])
+}
+
+// New model for Chat Messages
+model Chat {
+  id         String   @id @default(cuid())
+  journalId  String
+  journal    Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    String   @db.Text
+  response   String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([journalId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model MoodEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mood      String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Reflection {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // weekly/monthly   
+  content   String   @db.Text
+  insights  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
